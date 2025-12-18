@@ -24,33 +24,11 @@
       <!-- STEP 1: 이미지 업로드 -->
       <div v-if="currentStep === 0" class="card upload-card">
         <h2 class="card-title">📸 악보 이미지 업로드</h2>
-        <div class="upload-zone" @click="triggerFileInput">
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/*"
-            @change="handleFileSelect"
-            style="display: none;"
-          />
-          <div v-if="!previewImage" class="upload-placeholder">
-            <div class="upload-icon">📁</div>
-            <p class="upload-text">클릭하거나 이미지를 드래그하세요</p>
-            <p class="upload-hint">PNG, JPG 형식 지원</p>
-          </div>
-          <div v-else class="preview-container">
-            <img :src="previewImage" alt="미리보기" class="preview-image" />
-            <button class="btn-change" @click.stop="triggerFileInput">
-              이미지 변경
-            </button>
-          </div>
-        </div>
-        <button
-          v-if="previewImage"
-          class="btn-primary"
-          @click="startConversion"
-        >
-          변환 시작
-        </button>
+        <ImageUploader
+          ref="uploaderRef"
+          @fileSelected="handleFileSelected"
+          @convert="startConversion"
+        />
       </div>
 
       <!-- STEP 2: 변환 중 -->
@@ -118,15 +96,15 @@
 
 <script setup>
 import { ref } from 'vue';
+import ImageUploader from './components/ImageUploader.vue';
 
 // 상태 관리
 const currentStep = ref(0);
 const steps = ['이미지 업로드', '변환 중', '악보 보기'];
 
-// 이미지 업로드
-const fileInput = ref(null);
-const previewImage = ref(null);
+const uploaderRef = ref(null);
 const uploadedFile = ref(null);
+const imageMetadata = ref(null);
 
 // 로딩
 const loadingMessage = ref('이미지를 분석하고 있습니다...');
@@ -138,27 +116,20 @@ const originalKey = ref('C');
 const targetKey = ref('C');
 const showSolfege = ref(false);
 
-// 파일 선택
-function triggerFileInput() {
-  fileInput.value.click();
-}
-
-function handleFileSelect(event) {
-  const file = event.target.files[0];
-  if (file && file.type.startsWith('image/')) {
-    uploadedFile.value = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      previewImage.value = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  } else {
-    alert('이미지 파일만 업로드할 수 있습니다.');
-  }
+// 파일 선택 이벤트
+function handleFileSelected(data) {
+  uploadedFile.value = data.file;
+  imageMetadata.value = {
+    width: data.width,
+    height: data.height,
+    preview: data.preview
+  };
+  console.log('파일 선택됨:', data);
 }
 
 // 변환 시작 (더미)
-function startConversion() {
+function startConversion(file) {
+  console.log('변환 시작:', file.name);
   currentStep.value = 1;
 
   // 더미 로딩 시뮬레이션
@@ -176,7 +147,7 @@ function startConversion() {
 
     if (currentProgress % 25 === 0) {
       const msgIndex = Math.floor(currentProgress / 25) - 1;
-      if (msgIndex < messages.length) {
+      if (msgIndex >= 0 && msgIndex < messages.length) {
         loadingMessage.value = messages[msgIndex];
       }
     }
@@ -200,12 +171,17 @@ function applyTranspose() {
 // 초기화
 function resetAll() {
   currentStep.value = 0;
-  previewImage.value = null;
   uploadedFile.value = null;
+  imageMetadata.value = null;
   progress.value = 0;
   originalKey.value = 'C';
   targetKey.value = 'C';
   showSolfege.value = false;
+
+  // ImageUploader 컴포넌트 리셋
+  if (uploaderRef.value) {
+    uploaderRef.value.reset();
+  }
 }
 </script>
 
@@ -314,75 +290,7 @@ function resetAll() {
   color: #2d3748;
 }
 
-/* 업로드 카드 */
-.upload-zone {
-  border: 3px dashed #cbd5e0;
-  border-radius: 12px;
-  padding: 3rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.upload-zone:hover {
-  border-color: #667eea;
-  background: #f7fafc;
-}
-
-.upload-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.upload-icon {
-  font-size: 4rem;
-}
-
-.upload-text {
-  font-size: 1.2rem;
-  color: #4a5568;
-  margin: 0;
-}
-
-.upload-hint {
-  font-size: 0.9rem;
-  color: #a0aec0;
-  margin: 0;
-}
-
-.preview-container {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.preview-image {
-  max-width: 100%;
-  max-height: 400px;
-  border-radius: 8px;
-  object-fit: contain;
-}
-
-.btn-change {
-  padding: 0.5rem 1rem;
-  background: #edf2f7;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.3s;
-}
-
-.btn-change:hover {
-  background: #e2e8f0;
-}
+/* 업로드 카드 (이제 ImageUploader 컴포넌트가 처리) */
 
 /* 로딩 카드 */
 .loading-content {
