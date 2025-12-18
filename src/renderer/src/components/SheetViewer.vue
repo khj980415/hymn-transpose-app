@@ -49,11 +49,20 @@
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import solfegeService from '../services/solfegeService.js';
 
 const props = defineProps({
   musicXML: {
     type: String,
     required: true
+  },
+  showSolfege: {
+    type: Boolean,
+    default: false
+  },
+  currentKey: {
+    type: String,
+    default: 'C'
   }
 });
 
@@ -64,6 +73,8 @@ const osmdContainer = ref(null);
 const loading = ref(true);
 const error = ref('');
 const zoom = ref(1.0);
+const solfegeData = ref([]);
+const solfegeOverlays = ref([]);
 
 let osmd = null;
 
@@ -78,6 +89,28 @@ watch(
   async (newXML) => {
     if (newXML && osmd) {
       await renderSheet(newXML);
+    }
+  }
+);
+
+// showSolfege가 변경될 때
+watch(
+  () => props.showSolfege,
+  async (show) => {
+    if (show) {
+      await renderSolfegeOverlay();
+    } else {
+      clearSolfegeOverlay();
+    }
+  }
+);
+
+// currentKey가 변경될 때
+watch(
+  () => props.currentKey,
+  async () => {
+    if (props.showSolfege) {
+      await renderSolfegeOverlay();
     }
   }
 );
@@ -137,6 +170,9 @@ async function renderSheet(xmlString) {
     loading.value = true;
     error.value = '';
 
+    // 기존 오버레이 제거
+    clearSolfegeOverlay();
+
     // 컨테이너 초기화
     if (osmdContainer.value) {
       osmdContainer.value.innerHTML = '';
@@ -150,6 +186,11 @@ async function renderSheet(xmlString) {
 
     console.log('악보 렌더링 완료');
     emit('renderComplete');
+
+    // 계이름 표시가 활성화되어 있으면 오버레이 렌더링
+    if (props.showSolfege) {
+      await renderSolfegeOverlay();
+    }
   } catch (err) {
     console.error('악보 렌더링 실패:', err);
     error.value = '악보를 표시할 수 없습니다. MusicXML 형식을 확인하세요.';
@@ -189,6 +230,86 @@ function zoomOut() {
  */
 function resetZoom() {
   zoom.value = 1.0;
+}
+
+/**
+ * 계이름 오버레이 렌더링
+ */
+async function renderSolfegeOverlay() {
+  if (!osmd || !props.musicXML) return;
+
+  try {
+    // 기존 오버레이 제거
+    clearSolfegeOverlay();
+
+    // MusicXML에서 계이름 데이터 추출
+    solfegeData.value = solfegeService.extractSolfegeFromXML(
+      props.musicXML,
+      props.currentKey,
+      false // 고정도법 사용 (true로 변경하면 이동도법)
+    );
+
+    console.log('계이름 데이터:', solfegeData.value);
+
+    // OSMD SVG에서 음표 위치 찾기
+    await nextTick();
+
+    const svgElement = osmdContainer.value?.querySelector('svg');
+    if (!svgElement) {
+      console.error('SVG 요소를 찾을 수 없습니다.');
+      return;
+    }
+
+    // 모든 음표 요소 찾기
+    const noteHeads = svgElement.querySelectorAll('.vf-notehead');
+
+    let noteIndex = 0;
+    noteHeads.forEach((noteHead) => {
+      if (noteIndex >= solfegeData.value.length) return;
+
+      const solfegeInfo = solfegeData.value[noteIndex];
+
+      // 음표 위치 계산
+      const bbox = noteHead.getBBox();
+      const transform = noteHead.getCTM();
+
+      if (!transform) return;
+
+      const x = transform.e + bbox.x + bbox.width / 2;
+      const y = transform.f + bbox.y - 10; // 음표 위 10px
+
+      // 계이름 텍스트 요소 생성
+      const textElement = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      textElement.setAttribute('x', x);
+      textElement.setAttribute('y', y);
+      textElement.setAttribute('text-anchor', 'middle');
+      textElement.setAttribute('font-family', 'Arial, sans-serif');
+      textElement.setAttribute('font-size', '12');
+      textElement.setAttribute('font-weight', 'bold');
+      textElement.setAttribute('fill', '#e53e3e'); // 빨간색
+      textElement.setAttribute('class', 'solfege-label');
+      textElement.textContent = solfegeInfo.solfege;
+
+      svgElement.appendChild(textElement);
+      solfegeOverlays.value.push(textElement);
+
+      noteIndex++;
+    });
+
+    console.log(`계이름 ${solfegeOverlays.value.length}개 표시됨`);
+  } catch (error) {
+    console.error('계이름 오버레이 렌더링 실패:', error);
+  }
+}
+
+/**
+ * 계이름 오버레이 제거
+ */
+function clearSolfegeOverlay() {
+  solfegeOverlays.value.forEach((element) => {
+    element.remove();
+  });
+  solfegeOverlays.value = [];
 }
 
 /**
@@ -362,5 +483,12 @@ defineExpose({
 .osmd-container :deep(svg) {
   max-width: 100%;
   height: auto;
+}
+
+/* 계이름 라벨 스타일 */
+.osmd-container :deep(.solfege-label) {
+  pointer-events: none;
+  user-select: none;
+  text-shadow: 1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white;
 }
 </style>

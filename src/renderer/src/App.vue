@@ -60,6 +60,8 @@
           <SheetViewer
             ref="sheetViewerRef"
             :musicXML="isTransposed ? transposedMusicXML : musicXML"
+            :showSolfege="showSolfege"
+            :currentKey="isTransposed ? targetKey : originalKey"
             @renderComplete="handleRenderComplete"
             @renderError="handleRenderError"
           />
