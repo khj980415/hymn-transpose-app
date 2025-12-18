@@ -1,42 +1,534 @@
-<script setup>
-console.log('Vue app initialized - Phase 1');
-</script>
-
 <template>
   <div id="app">
-    <h1>🎵 악보 전조 프로그램</h1>
-    <p>Phase 1 완료 - 기본 구조 설정됨</p>
-    <div class="info">
-      <h2>프로젝트 정보</h2>
-      <ul>
-        <li>Electron + Vue 3 기반</li>
-        <li>electron-vite 사용</li>
-        <li>필수 라이브러리 설치 완료</li>
-      </ul>
+    <!-- 헤더 -->
+    <header class="app-header">
+      <h1 class="app-title">🎵 찬송가 전조 도우미</h1>
+      <p class="app-subtitle">악보 이미지를 업로드하고 원하는 조로 전조하세요</p>
+    </header>
+
+    <!-- 진행 단계 표시 -->
+    <div class="progress-steps">
+      <div
+        v-for="(step, index) in steps"
+        :key="index"
+        class="step"
+        :class="{ active: currentStep === index, completed: currentStep > index }"
+      >
+        <div class="step-number">{{ index + 1 }}</div>
+        <div class="step-label">{{ step }}</div>
+      </div>
     </div>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main-content">
+      <!-- STEP 1: 이미지 업로드 -->
+      <div v-if="currentStep === 0" class="card upload-card">
+        <h2 class="card-title">📸 악보 이미지 업로드</h2>
+        <div class="upload-zone" @click="triggerFileInput">
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/*"
+            @change="handleFileSelect"
+            style="display: none;"
+          />
+          <div v-if="!previewImage" class="upload-placeholder">
+            <div class="upload-icon">📁</div>
+            <p class="upload-text">클릭하거나 이미지를 드래그하세요</p>
+            <p class="upload-hint">PNG, JPG 형식 지원</p>
+          </div>
+          <div v-else class="preview-container">
+            <img :src="previewImage" alt="미리보기" class="preview-image" />
+            <button class="btn-change" @click.stop="triggerFileInput">
+              이미지 변경
+            </button>
+          </div>
+        </div>
+        <button
+          v-if="previewImage"
+          class="btn-primary"
+          @click="startConversion"
+        >
+          변환 시작
+        </button>
+      </div>
+
+      <!-- STEP 2: 변환 중 -->
+      <div v-if="currentStep === 1" class="card loading-card">
+        <h2 class="card-title">⚙️ 악보 변환 중...</h2>
+        <div class="loading-content">
+          <div class="spinner"></div>
+          <p class="loading-text">{{ loadingMessage }}</p>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: progress + '%' }"></div>
+          </div>
+          <p class="progress-percent">{{ progress }}%</p>
+        </div>
+      </div>
+
+      <!-- STEP 3: 악보 보기 및 전조 -->
+      <div v-if="currentStep === 2" class="result-container">
+        <!-- 악보 뷰어 -->
+        <div class="card sheet-card">
+          <h2 class="card-title">🎼 악보</h2>
+          <div class="sheet-viewer">
+            <div class="sheet-placeholder">
+              악보가 여기에 표시됩니다
+            </div>
+          </div>
+        </div>
+
+        <!-- 컨트롤 패널 -->
+        <div class="card control-card">
+          <h3 class="control-title">🎹 전조 및 설정</h3>
+
+          <div class="control-group">
+            <label class="control-label">원본 조</label>
+            <select class="control-select" v-model="originalKey">
+              <option v-for="key in keys" :key="key" :value="key">{{ key }}</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">변환할 조</label>
+            <select class="control-select" v-model="targetKey">
+              <option v-for="key in keys" :key="key" :value="key">{{ key }}</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">
+              <input type="checkbox" v-model="showSolfege" />
+              계이름 표시
+            </label>
+          </div>
+
+          <button class="btn-primary" @click="applyTranspose">
+            전조 적용
+          </button>
+
+          <button class="btn-secondary" @click="resetAll">
+            처음으로
+          </button>
+        </div>
+      </div>
+    </main>
   </div>
 </template>
 
+<script setup>
+import { ref } from 'vue';
+
+// 상태 관리
+const currentStep = ref(0);
+const steps = ['이미지 업로드', '변환 중', '악보 보기'];
+
+// 이미지 업로드
+const fileInput = ref(null);
+const previewImage = ref(null);
+const uploadedFile = ref(null);
+
+// 로딩
+const loadingMessage = ref('이미지를 분석하고 있습니다...');
+const progress = ref(0);
+
+// 전조 컨트롤
+const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const originalKey = ref('C');
+const targetKey = ref('C');
+const showSolfege = ref(false);
+
+// 파일 선택
+function triggerFileInput() {
+  fileInput.value.click();
+}
+
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (file && file.type.startsWith('image/')) {
+    uploadedFile.value = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      previewImage.value = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  } else {
+    alert('이미지 파일만 업로드할 수 있습니다.');
+  }
+}
+
+// 변환 시작 (더미)
+function startConversion() {
+  currentStep.value = 1;
+
+  // 더미 로딩 시뮬레이션
+  let currentProgress = 0;
+  const messages = [
+    '이미지를 분석하고 있습니다...',
+    '악보를 인식하고 있습니다...',
+    'MusicXML로 변환 중...',
+    '거의 완료되었습니다...'
+  ];
+
+  const interval = setInterval(() => {
+    currentProgress += 5;
+    progress.value = currentProgress;
+
+    if (currentProgress % 25 === 0) {
+      const msgIndex = Math.floor(currentProgress / 25) - 1;
+      if (msgIndex < messages.length) {
+        loadingMessage.value = messages[msgIndex];
+      }
+    }
+
+    if (currentProgress >= 100) {
+      clearInterval(interval);
+      setTimeout(() => {
+        currentStep.value = 2;
+      }, 500);
+    }
+  }, 100);
+}
+
+// 전조 적용 (더미)
+function applyTranspose() {
+  console.log(`전조: ${originalKey.value} → ${targetKey.value}`);
+  console.log(`계이름 표시: ${showSolfege.value}`);
+  alert(`${originalKey.value}에서 ${targetKey.value}로 전조합니다!`);
+}
+
+// 초기화
+function resetAll() {
+  currentStep.value = 0;
+  previewImage.value = null;
+  uploadedFile.value = null;
+  progress.value = 0;
+  originalKey.value = 'C';
+  targetKey.value = 'C';
+  showSolfege.value = false;
+}
+</script>
+
 <style scoped>
+* {
+  box-sizing: border-box;
+}
+
 #app {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 2rem;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* 헤더 */
+.app-header {
   text-align: center;
+  color: white;
+  margin-bottom: 3rem;
 }
 
-.info {
-  margin-top: 2rem;
-  padding: 1rem;
-  background: #f5f5f5;
+.app-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.app-subtitle {
+  font-size: 1.1rem;
+  margin: 0;
+  opacity: 0.9;
+}
+
+/* 진행 단계 */
+.progress-steps {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 3rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.5;
+  transition: opacity 0.3s;
+}
+
+.step.active,
+.step.completed {
+  opacity: 1;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 1.2rem;
+}
+
+.step.active .step-number {
+  background: white;
+  color: #667eea;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.step.completed .step-number {
+  background: #48bb78;
+}
+
+.step-label {
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* 메인 컨텐츠 */
+.main-content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* 카드 공통 */
+.card {
+  background: white;
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.card-title {
+  font-size: 1.5rem;
+  margin: 0 0 1.5rem 0;
+  color: #2d3748;
+}
+
+/* 업로드 카드 */
+.upload-zone {
+  border: 3px dashed #cbd5e0;
+  border-radius: 12px;
+  padding: 3rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-zone:hover {
+  border-color: #667eea;
+  background: #f7fafc;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.upload-icon {
+  font-size: 4rem;
+}
+
+.upload-text {
+  font-size: 1.2rem;
+  color: #4a5568;
+  margin: 0;
+}
+
+.upload-hint {
+  font-size: 0.9rem;
+  color: #a0aec0;
+  margin: 0;
+}
+
+.preview-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 400px;
   border-radius: 8px;
+  object-fit: contain;
 }
 
-.info ul {
-  list-style: none;
-  padding: 0;
+.btn-change {
+  padding: 0.5rem 1rem;
+  background: #edf2f7;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
 }
 
-.info li {
-  margin: 0.5rem 0;
+.btn-change:hover {
+  background: #e2e8f0;
+}
+
+/* 로딩 카드 */
+.loading-content {
+  text-align: center;
+  padding: 2rem;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 2rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 1.1rem;
+  color: #4a5568;
+  margin-bottom: 1.5rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  transition: width 0.3s;
+}
+
+.progress-percent {
+  font-size: 0.9rem;
+  color: #718096;
+}
+
+/* 결과 컨테이너 */
+.result-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+}
+
+.sheet-viewer {
+  min-height: 400px;
+  background: #f7fafc;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sheet-placeholder {
+  color: #a0aec0;
+  font-size: 1.1rem;
+}
+
+/* 컨트롤 패널 */
+.control-title {
+  font-size: 1.2rem;
+  margin: 0 0 1.5rem 0;
+  color: #2d3748;
+}
+
+.control-group {
+  margin-bottom: 1.5rem;
+}
+
+.control-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #4a5568;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.control-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.control-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* 버튼 */
+.btn-primary,
+.btn-secondary {
+  width: 100%;
+  padding: 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: 1rem;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+  background: #edf2f7;
+  color: #4a5568;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .result-container {
+    grid-template-columns: 1fr;
+  }
+
+  .progress-steps {
+    gap: 1rem;
+  }
+
+  .app-title {
+    font-size: 2rem;
+  }
 }
 </style>
