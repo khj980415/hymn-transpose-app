@@ -48,21 +48,21 @@
       <div v-if="currentStep === 2" class="result-container">
         <!-- 악보 뷰어 -->
         <div class="card sheet-card">
-          <h2 class="card-title">🎼 {{ parsedMusicData?.title || '악보' }}</h2>
-          <p v-if="parsedMusicData?.composer" class="composer">
-            작곡: {{ parsedMusicData.composer }}
-          </p>
-
-          <div class="sheet-viewer">
-            <div class="sheet-placeholder">
-              악보가 여기에 표시됩니다
-              <br /><br />
-              <small style="color: #a0aec0">
-                (파트 수: {{ parsedMusicData?.parts?.length || 0 }},
-                마디 수: {{ parsedMusicData?.parts?.[0]?.measures?.length || 0 }})
-              </small>
+          <div class="sheet-header">
+            <div>
+              <h2 class="card-title">🎼 {{ parsedMusicData?.title || '악보' }}</h2>
+              <p v-if="parsedMusicData?.composer" class="composer">
+                작곡: {{ parsedMusicData.composer }}
+              </p>
             </div>
           </div>
+
+          <SheetViewer
+            ref="sheetViewerRef"
+            :musicXML="musicXML"
+            @renderComplete="handleRenderComplete"
+            @renderError="handleRenderError"
+          />
         </div>
 
         <!-- 컨트롤 패널 -->
@@ -84,19 +84,23 @@
           </div>
 
           <div class="control-group">
-            <label class="control-label">
+            <label class="control-label checkbox-label">
               <input type="checkbox" v-model="showSolfege" />
-              계이름 표시
+              <span>계이름 표시</span>
             </label>
           </div>
 
-          <button class="btn-primary" @click="applyTranspose">
+          <button
+            class="btn-primary"
+            @click="applyTranspose"
+            :disabled="originalKey === targetKey"
+          >
             전조 적용
           </button>
 
-          <button class="btn-secondary" @click="resetAll">
-            처음으로
-          </button>
+          <button class="btn-secondary" @click="exportPDF">PDF로 저장</button>
+
+          <button class="btn-secondary" @click="resetAll">처음으로</button>
         </div>
       </div>
     </main>
@@ -106,6 +110,7 @@
 <script setup>
 import { ref } from 'vue';
 import ImageUploader from './components/ImageUploader.vue';
+import SheetViewer from './components/SheetViewer.vue';
 import omrService from './services/omrService.js';
 import xmlParser from './services/xmlParser.js';
 
@@ -114,6 +119,7 @@ const currentStep = ref(0);
 const steps = ['이미지 업로드', '변환 중', '악보 보기'];
 
 const uploaderRef = ref(null);
+const sheetViewerRef = ref(null);
 const uploadedFile = ref(null);
 const imageMetadata = ref(null);
 
@@ -217,6 +223,22 @@ function applyTranspose() {
   console.log(`전조: ${originalKey.value} → ${targetKey.value}`);
   console.log(`계이름 표시: ${showSolfege.value}`);
   alert(`${originalKey.value}에서 ${targetKey.value}로 전조합니다!`);
+}
+
+// 렌더링 완료 핸들러
+function handleRenderComplete() {
+  console.log('악보 렌더링 완료');
+}
+
+// 렌더링 에러 핸들러
+function handleRenderError(error) {
+  console.error('악보 렌더링 에러:', error);
+  alert('악보를 표시할 수 없습니다: ' + error.message);
+}
+
+// PDF 내보내기 (더미)
+function exportPDF() {
+  alert('PDF 내보내기 기능은 Phase 9에서 구현됩니다.');
 }
 
 // 초기화
@@ -347,8 +369,15 @@ function resetAll() {
 /* 업로드 카드 (이제 ImageUploader 컴포넌트가 처리) */
 
 /* 악보 정보 */
+.sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
 .composer {
-  margin: -1rem 0 1rem 0;
+  margin: 0.5rem 0 0 0;
   color: #718096;
   font-size: 0.95rem;
 }
@@ -439,6 +468,19 @@ function resetAll() {
   font-size: 0.95rem;
 }
 
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-label input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .control-select {
   width: 100%;
   padding: 0.75rem;
@@ -472,9 +514,14 @@ function resetAll() {
   color: white;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
