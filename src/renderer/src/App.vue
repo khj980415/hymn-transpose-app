@@ -59,7 +59,7 @@
 
           <SheetViewer
             ref="sheetViewerRef"
-            :musicXML="musicXML"
+            :musicXML="isTransposed ? transposedMusicXML : musicXML"
             @renderComplete="handleRenderComplete"
             @renderError="handleRenderError"
           />
@@ -71,7 +71,7 @@
 
           <div class="control-group">
             <label class="control-label">원본 조</label>
-            <select class="control-select" v-model="originalKey">
+            <select class="control-select" v-model="originalKey" :disabled="isTransposed">
               <option v-for="key in keys" :key="key" :value="key">{{ key }}</option>
             </select>
           </div>
@@ -81,6 +81,11 @@
             <select class="control-select" v-model="targetKey">
               <option v-for="key in keys" :key="key" :value="key">{{ key }}</option>
             </select>
+          </div>
+
+          <!-- 전조 상태 표시 -->
+          <div v-if="isTransposed" class="transposition-info">
+            ✓ {{ originalKey }} → {{ targetKey }}로 전조됨
           </div>
 
           <div class="control-group">
@@ -93,9 +98,14 @@
           <button
             class="btn-primary"
             @click="applyTranspose"
-            :disabled="originalKey === targetKey"
+            :disabled="originalKey === targetKey && !isTransposed"
           >
             전조 적용
+          </button>
+
+          <!-- 원본 복원 버튼 -->
+          <button v-if="isTransposed" class="btn-secondary" @click="restoreOriginal">
+            원본 복원
           </button>
 
           <button class="btn-secondary" @click="exportPDF">PDF로 저장</button>
@@ -113,6 +123,7 @@ import ImageUploader from './components/ImageUploader.vue';
 import SheetViewer from './components/SheetViewer.vue';
 import omrService from './services/omrService.js';
 import xmlParser from './services/xmlParser.js';
+import transposeService from './services/transposeService.js';
 
 // 상태 관리
 const currentStep = ref(0);
@@ -131,6 +142,10 @@ const progress = ref(0);
 const musicXML = ref('');
 const parsedMusicData = ref(null);
 const conversionError = ref('');
+
+// 전조 관련 상태
+const transposedMusicXML = ref('');
+const isTransposed = ref(false);
 
 // 전조 컨트롤
 const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -218,11 +233,37 @@ function fifthsToKey(fifths) {
   return keyMap[fifths.toString()] || 'C';
 }
 
-// 전조 적용 (더미)
-function applyTranspose() {
-  console.log(`전조: ${originalKey.value} → ${targetKey.value}`);
-  console.log(`계이름 표시: ${showSolfege.value}`);
-  alert(`${originalKey.value}에서 ${targetKey.value}로 전조합니다!`);
+// 전조 적용
+async function applyTranspose() {
+  if (originalKey.value === targetKey.value && !isTransposed.value) {
+    alert('원본 조와 목표 조가 같습니다.');
+    return;
+  }
+
+  try {
+    console.log(`전조 적용: ${originalKey.value} → ${targetKey.value}`);
+
+    // 원본 XML 또는 이미 전조된 XML 사용
+    const sourceXML = isTransposed.value ? transposedMusicXML.value : musicXML.value;
+    const currentKey = isTransposed.value ? targetKey.value : originalKey.value;
+
+    // 전조 수행
+    const newXML = transposeService.transpose(sourceXML, currentKey, targetKey.value);
+
+    // 전조된 XML 저장
+    transposedMusicXML.value = newXML;
+    isTransposed.value = true;
+
+    // 악보 재렌더링
+    if (sheetViewerRef.value) {
+      await sheetViewerRef.value.renderSheet(newXML);
+    }
+
+    console.log('전조 완료!');
+  } catch (error) {
+    console.error('전조 실패:', error);
+    alert('전조에 실패했습니다: ' + error.message);
+  }
 }
 
 // 렌더링 완료 핸들러
@@ -241,6 +282,23 @@ function exportPDF() {
   alert('PDF 내보내기 기능은 Phase 9에서 구현됩니다.');
 }
 
+// 원본 악보로 복원
+async function restoreOriginal() {
+  try {
+    isTransposed.value = false;
+    targetKey.value = originalKey.value;
+
+    if (sheetViewerRef.value) {
+      await sheetViewerRef.value.renderSheet(musicXML.value);
+    }
+
+    console.log('원본 악보로 복원됨');
+  } catch (error) {
+    console.error('복원 실패:', error);
+    alert('원본 복원에 실패했습니다.');
+  }
+}
+
 // 초기화
 function resetAll() {
   currentStep.value = 0;
@@ -253,6 +311,8 @@ function resetAll() {
   musicXML.value = '';
   parsedMusicData.value = null;
   conversionError.value = '';
+  transposedMusicXML.value = '';
+  isTransposed.value = false;
 
   // ImageUploader 컴포넌트 리셋
   if (uploaderRef.value) {
@@ -493,6 +553,24 @@ function resetAll() {
 .control-select:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.control-select:disabled {
+  background: #f7fafc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.transposition-info {
+  padding: 0.75rem;
+  background: #e6fffa;
+  border: 1px solid #81e6d9;
+  border-radius: 6px;
+  color: #234e52;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 1rem;
 }
 
 /* 버튼 */
