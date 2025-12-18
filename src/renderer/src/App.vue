@@ -331,7 +331,7 @@ function resetAll() {
 #app {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 2rem;
+  padding: 0.75rem 0.5rem;
 }
 
 /* 헤더 */
@@ -410,16 +410,18 @@ function resetAll() {
 
 /* 메인 컨텐츠 */
 .main-content {
-  max-width: 900px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
+  padding: 0 1rem;
 }
 
 /* 카드 공통 */
 .card {
   background: white;
-  border-radius: 20px;
-  padding: 2.5rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 .card-title {
@@ -493,7 +495,7 @@ function resetAll() {
 /* 결과 컨테이너 */
 .result-container {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 3fr 1fr;
   gap: 1.5rem;
 }
 

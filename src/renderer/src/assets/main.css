@@ -2,9 +2,11 @@
 
 body {
   display: flex;
-  align-items: center;
+  /* 상단부터 쌓이도록 변경하여 뷰포트가 작을 때 콘텐츠가 잘리지 않게 함 */
+  align-items: flex-start;
   justify-content: center;
-  overflow: hidden;
+  /* 스크롤 허용 (이전에는 hidden으로 잘림 발생) */
+  overflow: auto;
   background-image: url('./wavy-lines.svg');
   background-size: cover;
   user-select: none;

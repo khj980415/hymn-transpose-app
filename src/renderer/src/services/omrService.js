@@ -10,7 +10,9 @@ class OMRService {
     this.useDummyData = true;
 
     // 실제 API 엔드포인트 (나중에 설정)
-    this.apiEndpoint = process.env.VITE_OMR_API_ENDPOINT || '';
+    // 브라우저/렌더러 환경에서는 `process`가 없을 수 있으므로
+    // Vite의 `import.meta.env`를 우선 사용하고, 없을 경우 안전하게 체크합니다.
+    this.apiEndpoint = (typeof process !== 'undefined' && process.env && process.env.VITE_OMR_API_ENDPOINT) || (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_OMR_API_ENDPOINT) || '';
   }
 
   /**

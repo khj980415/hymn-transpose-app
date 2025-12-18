@@ -1,17 +1,7 @@
 <template>
   <div class="sheet-viewer">
-    <div v-if="loading" class="loading-state">
-      <div class="spinner"></div>
-      <p>악보를 렌더링하고 있습니다...</p>
-    </div>
-
-    <div v-else-if="error" class="error-state">
-      <div class="error-icon">⚠️</div>
-      <p class="error-message">{{ error }}</p>
-      <button class="btn-retry" @click="retryRender">다시 시도</button>
-    </div>
-
-    <div v-else class="sheet-container">
+    <!-- 항상 OSMD 컨테이너는 DOM에 남겨둠 -->
+    <div class="sheet-container">
       <!-- 컨트롤 바 -->
       <div class="controls">
         <button
@@ -36,12 +26,24 @@
         </button>
       </div>
 
-      <!-- 악보 렌더링 영역 -->
+      <!-- 악보 렌더링 영역 (항상 존재) -->
       <div
         ref="osmdContainer"
         class="osmd-container"
         :style="{ transform: `scale(${zoom})` }"
       ></div>
+    </div>
+
+    <!-- 로딩/에러 오버레이 (컨테이너 위에 표시) -->
+    <div v-if="loading" class="overlay loading-state">
+      <div class="spinner"></div>
+      <p>악보를 렌더링하고 있습니다...</p>
+    </div>
+
+    <div v-if="error" class="overlay error-state">
+      <div class="error-icon">⚠️</div>
+      <p class="error-message">{{ error }}</p>
+      <button class="btn-retry" @click="retryRender">다시 시도</button>
     </div>
   </div>
 </template>
@@ -87,7 +89,14 @@ onMounted(async () => {
 watch(
   () => props.musicXML,
   async (newXML) => {
-    if (newXML && osmd) {
+    if (!newXML) return;
+
+    // Ensure OSMD is initialized when musicXML becomes available
+    if (!osmd) {
+      await initializeOSMD();
+    }
+
+    if (osmd) {
       await renderSheet(newXML);
     }
   }
@@ -125,8 +134,17 @@ async function initializeOSMD() {
 
     await nextTick(); // DOM이 준비될 때까지 대기
 
+    // 컨테이너가 아직 렌더링되지 않았을 수 있으므로 안전하게 대기
     if (!osmdContainer.value) {
-      throw new Error('악보 컨테이너를 찾을 수 없습니다.');
+      // 짧게 한 번 더 기다려본다
+      await new Promise((r) => setTimeout(r, 0));
+    }
+
+    if (!osmdContainer.value) {
+      // 초기 마운트 시점에 컨테이너가 없으면 강제 에러 대신 초기화를 미루고 종료
+      console.warn('OSMD 컨테이너가 아직 준비되지 않았습니다. 초기화를 보류합니다.');
+      loading.value = false;
+      return;
     }
 
     // OSMD 인스턴스 생성
@@ -329,10 +347,10 @@ defineExpose({
 <style scoped>
 .sheet-viewer {
   width: 100%;
-  min-height: 500px;
+  min-height: 520px;
   background: #f7fafc;
-  border-radius: 12px;
-  padding: 1.5rem;
+  border-radius: 8px;
+  padding: 0.75rem;
   position: relative;
 }
 
@@ -450,13 +468,28 @@ defineExpose({
 .osmd-container {
   width: 100%;
   background: white;
-  padding: 2rem;
+  padding: 1rem;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   overflow: auto;
-  max-height: 600px;
+  max-height: calc(100vh - 160px);
   transform-origin: top left;
   transition: transform 0.2s;
+}
+
+/* 오버레이 (로딩/에러) 위치 조정 */
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.85);
+  border-radius: 12px;
+  z-index: 20;
 }
 
 /* 스크롤바 스타일링 */
@@ -481,8 +514,10 @@ defineExpose({
 
 /* OSMD SVG 스타일 오버라이드 */
 .osmd-container :deep(svg) {
-  max-width: 100%;
+  width: 100%;
   height: auto;
+  display: block;
+  margin: 0;
 }
 
 /* 계이름 라벨 스타일 */
