@@ -48,10 +48,19 @@
       <div v-if="currentStep === 2" class="result-container">
         <!-- 악보 뷰어 -->
         <div class="card sheet-card">
-          <h2 class="card-title">🎼 악보</h2>
+          <h2 class="card-title">🎼 {{ parsedMusicData?.title || '악보' }}</h2>
+          <p v-if="parsedMusicData?.composer" class="composer">
+            작곡: {{ parsedMusicData.composer }}
+          </p>
+
           <div class="sheet-viewer">
             <div class="sheet-placeholder">
               악보가 여기에 표시됩니다
+              <br /><br />
+              <small style="color: #a0aec0">
+                (파트 수: {{ parsedMusicData?.parts?.length || 0 }},
+                마디 수: {{ parsedMusicData?.parts?.[0]?.measures?.length || 0 }})
+              </small>
             </div>
           </div>
         </div>
@@ -97,6 +106,8 @@
 <script setup>
 import { ref } from 'vue';
 import ImageUploader from './components/ImageUploader.vue';
+import omrService from './services/omrService.js';
+import xmlParser from './services/xmlParser.js';
 
 // 상태 관리
 const currentStep = ref(0);
@@ -109,6 +120,11 @@ const imageMetadata = ref(null);
 // 로딩
 const loadingMessage = ref('이미지를 분석하고 있습니다...');
 const progress = ref(0);
+
+// MusicXML 관련 상태
+const musicXML = ref('');
+const parsedMusicData = ref(null);
+const conversionError = ref('');
 
 // 전조 컨트롤
 const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -127,38 +143,73 @@ function handleFileSelected(data) {
   console.log('파일 선택됨:', data);
 }
 
-// 변환 시작 (더미)
-function startConversion(file) {
+// 변환 시작
+async function startConversion(file) {
   console.log('변환 시작:', file.name);
   currentStep.value = 1;
+  progress.value = 0;
+  conversionError.value = '';
 
-  // 더미 로딩 시뮬레이션
-  let currentProgress = 0;
-  const messages = [
-    '이미지를 분석하고 있습니다...',
-    '악보를 인식하고 있습니다...',
-    'MusicXML로 변환 중...',
-    '거의 완료되었습니다...'
-  ];
+  try {
+    // 1단계: 이미지 → MusicXML
+    loadingMessage.value = '이미지를 분석하고 있습니다...';
+    progress.value = 25;
 
-  const interval = setInterval(() => {
-    currentProgress += 5;
-    progress.value = currentProgress;
+    const xmlString = await omrService.convertToMusicXML(file);
+    musicXML.value = xmlString;
 
-    if (currentProgress % 25 === 0) {
-      const msgIndex = Math.floor(currentProgress / 25) - 1;
-      if (msgIndex >= 0 && msgIndex < messages.length) {
-        loadingMessage.value = messages[msgIndex];
-      }
-    }
+    // 2단계: MusicXML 파싱
+    loadingMessage.value = '악보 데이터를 처리하고 있습니다...';
+    progress.value = 75;
 
-    if (currentProgress >= 100) {
-      clearInterval(interval);
-      setTimeout(() => {
-        currentStep.value = 2;
-      }, 500);
-    }
-  }, 100);
+    const parsedData = await xmlParser.parse(xmlString);
+    parsedMusicData.value = parsedData;
+
+    console.log('변환 완료:', parsedData);
+
+    // 자동으로 조성 감지
+    const keyInfo = xmlParser.extractKeySignature(parsedData);
+    originalKey.value = fifthsToKey(keyInfo.fifths);
+
+    // 3단계: 완료
+    loadingMessage.value = '완료되었습니다!';
+    progress.value = 100;
+
+    setTimeout(() => {
+      currentStep.value = 2;
+    }, 500);
+  } catch (error) {
+    console.error('변환 실패:', error);
+    conversionError.value = error.message || '변환 중 오류가 발생했습니다.';
+
+    // 에러 발생 시 STEP 1로 돌아가기
+    setTimeout(() => {
+      currentStep.value = 0;
+      alert('변환 실패: ' + conversionError.value);
+    }, 1000);
+  }
+}
+
+// Fifths 값을 조 이름으로 변환
+function fifthsToKey(fifths) {
+  const keyMap = {
+    '-7': 'Cb',
+    '-6': 'Gb',
+    '-5': 'Db',
+    '-4': 'Ab',
+    '-3': 'Eb',
+    '-2': 'Bb',
+    '-1': 'F',
+    '0': 'C',
+    '1': 'G',
+    '2': 'D',
+    '3': 'A',
+    '4': 'E',
+    '5': 'B',
+    '6': 'F#',
+    '7': 'C#'
+  };
+  return keyMap[fifths.toString()] || 'C';
 }
 
 // 전조 적용 (더미)
@@ -177,6 +228,9 @@ function resetAll() {
   originalKey.value = 'C';
   targetKey.value = 'C';
   showSolfege.value = false;
+  musicXML.value = '';
+  parsedMusicData.value = null;
+  conversionError.value = '';
 
   // ImageUploader 컴포넌트 리셋
   if (uploaderRef.value) {
@@ -291,6 +345,13 @@ function resetAll() {
 }
 
 /* 업로드 카드 (이제 ImageUploader 컴포넌트가 처리) */
+
+/* 악보 정보 */
+.composer {
+  margin: -1rem 0 1rem 0;
+  color: #718096;
+  font-size: 0.95rem;
+}
 
 /* 로딩 카드 */
 .loading-content {
