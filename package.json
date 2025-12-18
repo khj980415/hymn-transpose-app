@@ -1,10 +1,10 @@
 {
-  "name": "helpmeplz_project",
+  "name": "hymn-transpose-app",
   "version": "1.0.0",
-  "description": "An Electron application with Vue",
+  "description": "악보 전조 및 계이름 표시 프로그램",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "hymn-transpose-app",
+  "homepage": "https://github.com/khj980415/hymn-transpose-app",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
